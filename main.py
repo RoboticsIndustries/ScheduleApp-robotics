@@ -1,89 +1,15 @@
+# main.py
 from re import split
 from TeamMember import TeamMember
 import csv
 import tkinter as tk
+from tkinter import ttk
 from constants import pits_limit, scouting_limit, drive_limit, member_pits_max, leads_pits_max, scouting_max
-# Main factors to consider
-# Position - are lead or normal member?
-# Timings - When are they available?
 
-# Scheduling algorithm
-
-# For each time slot, you have to return a 2D list. 
-# Prerequisite - you have a list of TeamMember objects
-# Create a list of all of the time slots
-# Use for loops to loop through all the time slots
-# Use for loops to get each element of a TeamMember and loop through their list of available timings to see if one matches the current time slot in the main loop 
-
-
-# team_members = [  
-# {"name": "Aryan", "time_slots": ["4-5", "5-6", "8-9"]},
-# {"name": "Kush", "time_slots": ["1-2", "2-3", "5-6"]},
-# {"name": "Vatsal", "time_slots": ["1-2", "2-3", "3-4"]},
-# ]
-# current_time_slot == "5-6"
-# drive_team = []
-# pits = []
-# scouting = []
-# for member in team_members:
-# if current_time_slot in member.time_slots:
-# role = member["time_slots"][current_time_slot]
-# if role == "drive team":
-# drive_team.append(member["name"])
-# elif role == "pits":
-# pits.append(member["name"])
-# elif role == "scouting":
-# scouting.append(member["name"])
-
-# result = [drive_team, pits, scouting]
-
-# print(result)
-
-
-# Final return for the program: for each time slot, return a 2D list with this format [[All of the people in the drive team], [all of the people in pits], [all of the people who are scouting]
-
-
-# STEP 1: Find all available members for a specific time slot
-
-# available_members = []
-
-
-# for time_slot in time_slots:
-#   for member in team_members:
-#     if time_slot in member.available_timings:
-#       available_members.append(member)
-#   print(f"members available at {time_slot}")
-#   for member in available_members:
-#     print(f"{member.name} - {member.position}")
-
-
-
-# Step 2 (7/9): Assign members to lists of roles based on their position, experience, and times used. Start to program this for homework
-
-
-
-
-# Filter the available members based on their position so that you can populate the drive team list
-
-# Difference between pop and remove: pop goes by index and remove goes by value
-# ex. list = [1, 2, 3, 4, 5]
-# If you want to remove 3, you can do list.remove(3) or list.pop(2)
-
-  # Factors we need to consider to put people in pits. Goal: prioritize leads when you choose who is in pits. HINT: PUT THEM INTO THE PITS LIST FIRST
-  # Position 
-    # put them in pits for the first time
-    # add it to an increment counter
-    # from there, we cannot put the lead into pits for more than 4 times.
-  # Experience
-  # Times Used (difference in threshold for normal member and lead)
-
-  # Comments on homework
-  # You don't just want to put people who are leads into pits. You want to prioritize them. You want to put them into pits first before you put normal members into pits. Also, pits are limited, so you want to make sure that you don't put more than a certain amount of people into pits.
-
-# Homework: populate the return dictionary with the return list for each time slot.
-# Reference: https://www.w3schools.com/python/python_dictionaries.asp
+# Master list of TeamMember objects
 team_members = []
 
+# Keep original finished_dict structure
 finished_dict = {
     "8-9": [],
     "9-10": [],
@@ -97,79 +23,150 @@ finished_dict = {
     "5-6": [],
 }
 
-# This function should read the data from the csv file and distribute it into different TeamMember objects, which are then put into one ultimate list to be used with your program
+# -----------------------------
+# Read CSV and create TeamMember objects (merge duplicate names)
+# -----------------------------
 def process_csv():
-    with open('response.csv', mode = 'r') as file:
+    members_map = {}  # name -> TeamMember-like data store
+    with open('response.csv', mode='r', newline='', encoding='utf-8') as file:
         csvFile = csv.reader(file)
+        first = next(csvFile, None)
+        if first is None:
+            return
+        if any("name" in cell.lower() for cell in first):
+            pass
+        else:
+            csvFile = [first] + list(csvFile)
         for line in csvFile:
-            name = line[1]
-            position = line[2]
-            available_timings = line[3].split(",") # spliting it based off the comma
-            team_members.append(TeamMember(name, available_timings, position)) 
-            # creating the team member object from each line
+            if not line or len(line) < 4:
+                continue
+            name = line[1].strip()
+            position = line[2].strip()
+            available_timings = [t.strip() for t in line[3].split(",") if t.strip()]
 
+            if name in members_map:
+                existing = members_map[name]
+                for t in available_timings:
+                    if t not in existing["timings"]:
+                        existing["timings"].append(t)
+                existing_pos = existing["position"].title()
+                new_pos = position.title()
+                priority = {"Drive Team": 3, "Lead": 2, "Member": 1}
+                if priority.get(new_pos, 0) > priority.get(existing_pos, 0):
+                    existing["position"] = new_pos
+            else:
+                members_map[name] = {"position": position.title(), "timings": available_timings}
 
-# OBJECTIVE: make a team member object from each line - done
-# OBJECTIVE: split the timings into a list of strings - done
-# Hint link: https://www.w3schools.com/python/ref_string_split.asp
+    for name, info in members_map.items():
+        team_members.append(TeamMember(name, info["timings"], info["position"]))
 
-
-
+# -----------------------------
+# Scheduling algorithm
+# -----------------------------
 def schedule_teammates():
-    for time_slot in finished_dict.keys():
-        available_members = []
+    for time_slot in list(finished_dict.keys()):
+        available_members = [m for m in team_members if time_slot in m.available_timings]
+
         pits = []
         scouting = []
         drive_team = []
-        
-        for member in team_members:
-            if time_slot in member.available_timings:
-                available_members.append(member)
-    
-        for member in available_members:
-            if member.position == "Drive Team" and len(drive_team) < drive_limit:
-                drive_team.append(member)
-                available_members.remove(member)
-    
-        for member in available_members:
-            if member.position == "Lead" and member.times_used < leads_pits_max and len(pits) < pits_limit:
-                pits.append(member)
-                available_members.remove(member)
-                member.increment_times_used()
-    
-        for member in available_members:
-            if member.position == "Member" and member.times_used < member_pits_max and len(pits) < pits_limit:
-                pits.append(member)
-                member.increment_times_used()
-                available_members.remove(member)
-    
-        for member in available_members:
-            if len(scouting) < scouting_limit and member.times_used < scouting_max:
-                scouting.append(member)
-                member.increment_times_used()
+        stands = []
 
-        
-        finished_dict[time_slot] = [
-            [member.name for member in pits],
-            [member.name for member in scouting],
-            [member.name for member in drive_team]
-        ]
+        # 1) Drive Team (hard constraint) — now permanent assignment
+        drive_candidates = [m for m in available_members if m.position == "Drive Team"]
+        picked = drive_candidates[:drive_limit]
+        for m in picked:
+            drive_team.append(m.name)
+            m.assign_drive()
+            available_members.remove(m)
 
+        # 2) Pits: Leads first
+        lead_candidates = [m for m in available_members if m.position == "Lead" and m.can_do("Pits") and m.pits_count < leads_pits_max]
+        for m in lead_candidates:
+            if len(pits) >= pits_limit:
+                break
+            pits.append(m.name)
+            m.assign_pits()
+            available_members.remove(m)
 
-process_csv()
-schedule_teammates()
+        # 3) Pits: Members next
+        member_candidates = [m for m in available_members if m.position == "Member" and m.can_do("Pits") and m.pits_count < member_pits_max]
+        for m in member_candidates:
+            if len(pits) >= pits_limit:
+                break
+            pits.append(m.name)
+            m.assign_pits()
+            available_members.remove(m)
 
+        # 4) Scouting
+        scouting_candidates = [m for m in available_members if m.can_do("Scouting") and m.scouting_count < scouting_max]
+        for m in scouting_candidates:
+            if len(scouting) >= scouting_limit:
+                break
+            scouting.append(m.name)
+            m.assign_scouting()
+            available_members.remove(m)
+
+        # 5) Default Stands for remaining
+        for m in available_members:
+            stands.append(m.name)
+            m.assign_stands()
+
+        finished_dict[time_slot] = [pits, scouting, drive_team, stands]  # add stands to output
+
+# -----------------------------
+# Tkinter display with scrollable frame
+# -----------------------------
 def show_schedule():
     window = tk.Tk()
     window.title("Schedule")
 
-    for key, value in finished_dict.items():
-        pits, scouting, drive_team = value
-        tk.Label(window, text =f"Time Slot: {key}", font=("Arial", 14, "bold")).pack()
-        tk.Label(window, text = f"Pits:{pits}").pack()
-        tk.Label(window, text = f"Scouting:{scouting}").pack()
-        tk.Label(window, text =f"Drive_team: {drive_team}").pack()
+    canvas = tk.Canvas(window)
+    scrollbar = ttk.Scrollbar(window, orient="vertical", command=canvas.yview)
+    scrollable_frame = ttk.Frame(canvas)
+
+    scrollable_frame.bind(
+        "<Configure>",
+        lambda e: canvas.configure(
+            scrollregion=canvas.bbox("all")
+        )
+    )
+
+    canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
+    canvas.configure(yscrollcommand=scrollbar.set)
+
+    canvas.pack(side="left", fill="both", expand=True)
+    scrollbar.pack(side="right", fill="y")
+
+    row = 0
+    for time_slot, roles in finished_dict.items():
+        pits, scouting, drive_team, stands = roles
+
+        tk.Label(scrollable_frame, text=f"{time_slot}", font=("Arial", 14, "bold")).grid(row=row, column=0, sticky="w", padx=5, pady=(8,2))
+        row += 1
+
+        tk.Label(scrollable_frame, text="  Drive Team:", font=("Arial", 12, "bold")).grid(row=row, column=0, sticky="w", padx=20)
+        tk.Label(scrollable_frame, text=", ".join(drive_team) if drive_team else "None").grid(row=row, column=1, sticky="w")
+        row += 1
+
+        tk.Label(scrollable_frame, text="  Pits:", font=("Arial", 12, "bold")).grid(row=row, column=0, sticky="w", padx=20)
+        tk.Label(scrollable_frame, text=", ".join(pits) if pits else "None").grid(row=row, column=1, sticky="w")
+        row += 1
+
+        tk.Label(scrollable_frame, text="  Scouting:", font=("Arial", 12, "bold")).grid(row=row, column=0, sticky="w", padx=20)
+        tk.Label(scrollable_frame, text=", ".join(scouting) if scouting else "None").grid(row=row, column=1, sticky="w")
+        row += 1
+
+        tk.Label(scrollable_frame, text="  Stands:", font=("Arial", 12, "bold")).grid(row=row, column=0, sticky="w", padx=20)
+        tk.Label(scrollable_frame, text=", ".join(stands) if stands else "None").grid(row=row, column=1, sticky="w")
+        row += 1
 
     window.mainloop()
+
+
+# -----------------------------
+# Run the whole flow
+# -----------------------------
+process_csv()
+schedule_teammates()
 show_schedule()
-# tkinter documentation: https://docs.python.org/3/library/tkinter.html
