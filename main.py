@@ -1,4 +1,3 @@
-# main.py
 from re import split
 from TeamMember import TeamMember
 import csv
@@ -27,7 +26,7 @@ finished_dict = {
 # Read CSV and create TeamMember objects (merge duplicate names)
 # -----------------------------
 def process_csv():
-    members_map = {}  # name -> TeamMember-like data store
+    members_map = {}
     with open('response.csv', mode='r', newline='', encoding='utf-8') as file:
         csvFile = csv.reader(file)
         first = next(csvFile, None)
@@ -72,7 +71,7 @@ def schedule_teammates():
         drive_team = []
         stands = []
 
-        # 1) Drive Team (hard constraint) — now permanent assignment
+        # Drive Team (permanent)
         drive_candidates = [m for m in available_members if m.position == "Drive Team"]
         picked = drive_candidates[:drive_limit]
         for m in picked:
@@ -80,7 +79,7 @@ def schedule_teammates():
             m.assign_drive()
             available_members.remove(m)
 
-        # 2) Pits: Leads first
+        # Pits: Leads first
         lead_candidates = [m for m in available_members if m.position == "Lead" and m.can_do("Pits") and m.pits_count < leads_pits_max]
         for m in lead_candidates:
             if len(pits) >= pits_limit:
@@ -89,7 +88,7 @@ def schedule_teammates():
             m.assign_pits()
             available_members.remove(m)
 
-        # 3) Pits: Members next
+        # Pits: Members next
         member_candidates = [m for m in available_members if m.position == "Member" and m.can_do("Pits") and m.pits_count < member_pits_max]
         for m in member_candidates:
             if len(pits) >= pits_limit:
@@ -98,7 +97,7 @@ def schedule_teammates():
             m.assign_pits()
             available_members.remove(m)
 
-        # 4) Scouting
+        # Scouting
         scouting_candidates = [m for m in available_members if m.can_do("Scouting") and m.scouting_count < scouting_max]
         for m in scouting_candidates:
             if len(scouting) >= scouting_limit:
@@ -107,15 +106,15 @@ def schedule_teammates():
             m.assign_scouting()
             available_members.remove(m)
 
-        # 5) Default Stands for remaining
+        # Stands
         for m in available_members:
             stands.append(m.name)
             m.assign_stands()
 
-        finished_dict[time_slot] = [pits, scouting, drive_team, stands]  # add stands to output
+        finished_dict[time_slot] = [pits, scouting, drive_team, stands]
 
 # -----------------------------
-# Tkinter display with scrollable frame
+# Tkinter: list view
 # -----------------------------
 def show_schedule():
     window = tk.Tk()
@@ -161,11 +160,53 @@ def show_schedule():
         tk.Label(scrollable_frame, text=", ".join(stands) if stands else "None").grid(row=row, column=1, sticky="w")
         row += 1
 
+    # Add button to open grid view
+    tk.Button(window, text="Open Grid View", command=show_grid_view).pack(pady=10)
+
     window.mainloop()
 
+# -----------------------------
+# Tkinter: grid view
+# -----------------------------
+def show_grid_view():
+    grid_window = tk.Toplevel()
+    grid_window.title("Schedule Grid View")
+
+    time_slots = list(finished_dict.keys())
+    roles = ["Drive Team", "Pits", "Scouting", "Stands"]
+
+    # Top row = time slots
+    for col, time_slot in enumerate(time_slots, start=1):
+        tk.Label(grid_window, text=time_slot, font=("Arial", 12, "bold"),
+                 borderwidth=1, relief="solid", padx=5, pady=5).grid(row=0, column=col, sticky="nsew")
+
+    # First col = role names
+    for row, role in enumerate(roles, start=1):
+        tk.Label(grid_window, text=role, font=("Arial", 12, "bold"),
+                 borderwidth=1, relief="solid", padx=5, pady=5).grid(row=row, column=0, sticky="nsew")
+
+    # Fill cells with assigned names
+    for col, time_slot in enumerate(time_slots, start=1):
+        pits, scouting, drive_team, stands = finished_dict[time_slot]
+        role_map = {
+            "Drive Team": drive_team,
+            "Pits": pits,
+            "Scouting": scouting,
+            "Stands": stands,
+        }
+        for row, role in enumerate(roles, start=1):
+            names = ", ".join(role_map[role]) if role_map[role] else "None"
+            tk.Label(grid_window, text=names, borderwidth=1, relief="solid",
+                     padx=5, pady=5, wraplength=150, justify="left").grid(row=row, column=col, sticky="nsew")
+
+    # Stretchable cells
+    for col in range(len(time_slots) + 1):
+        grid_window.grid_columnconfigure(col, weight=1)
+    for row in range(len(roles) + 1):
+        grid_window.grid_rowconfigure(row, weight=1)
 
 # -----------------------------
-# Run the whole flow
+# Run
 # -----------------------------
 process_csv()
 schedule_teammates()
